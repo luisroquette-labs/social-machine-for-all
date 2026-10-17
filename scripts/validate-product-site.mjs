@@ -15,6 +15,6 @@ if (h1Count !== 1) throw new Error(`Expected one H1, found ${h1Count}`);
 if (ids.length !== new Set(ids).size) throw new Error('Duplicate IDs found');
 if (tabs !== 3) throw new Error(`Expected three automation tabs, found ${tabs}`);
 if (!html.includes('Illustrative controls only')) throw new Error('Simulation boundary is missing');
-if (!html.includes('https://luisroquette-labs.github.io/social-machine-for-all/') || html.includes('cfgauss-ai')) throw new Error('Product site still points to the previous GitHub owner');
+if (html.match(/<link rel="canonical" href="([^"]+)">/)?.[1] !== 'https://luisroquette-labs.github.io/social-machine-for-all/' || html.includes('cfgauss-ai')) throw new Error('Product site still points to the previous GitHub owner');
 await Promise.all(refs.map((ref) => access(resolve(docs, ref))));
 console.log(`Product site validation passed: one H1, ${ids.length} unique IDs, three stages, explicit boundary, no missing assets`);
