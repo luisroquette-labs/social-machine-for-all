@@ -3,10 +3,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/cfgauss-ai/social-machine-for-all/actions/workflows/ci.yml"><img src="https://github.com/cfgauss-ai/social-machine-for-all/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
-  <a href="https://cfgauss-ai.github.io/social-machine-for-all/"><img src="https://img.shields.io/badge/product%20site-live-52E0B3?style=flat-square" alt="Social Machine product site" /></a>
+  <a href="https://github.com/luisroquette-labs/social-machine-for-all/actions/workflows/ci.yml"><img src="https://github.com/luisroquette-labs/social-machine-for-all/actions/workflows/ci.yml/badge.svg" alt="CI status" /></a>
+  <a href="https://luisroquette-labs.github.io/social-machine-for-all/"><img src="https://img.shields.io/badge/product%20site-live-52E0B3?style=flat-square" alt="Social Machine product site" /></a>
   <a href="https://github.com/luisroquette-labs/RocketLabs"><img src="https://img.shields.io/badge/RocketLabs-open%20system-7C5CFC?style=flat-square" alt="Part of RocketLabs" /></a>
-  <a href="https://github.com/cfgauss-ai/social-machine-for-all/releases/latest"><img src="https://img.shields.io/github/v/release/luisroquette-labs/social-machine-for-all?style=flat-square&color=52E0B3" alt="Latest release" /></a>
+  <a href="https://github.com/luisroquette-labs/social-machine-for-all/releases/latest"><img src="https://img.shields.io/github/v/release/luisroquette-labs/social-machine-for-all?style=flat-square&color=52E0B3" alt="Latest release" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-52E0B3?style=flat-square" alt="MIT License" /></a>
   <img src="https://img.shields.io/badge/node-%3E%3D20.9-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js 20.9 or newer" />
   <img src="https://img.shields.io/badge/self--hosted-your%20data-70B7FF?style=flat-square" alt="Self-hosted" />
@@ -174,7 +174,7 @@ video rendering, analytics or email services.
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/cfgauss-ai/social-machine-for-all.git
+git clone https://github.com/luisroquette-labs/social-machine-for-all.git
 cd social-machine-for-all
 cp .env.example .env.local
 npm ci

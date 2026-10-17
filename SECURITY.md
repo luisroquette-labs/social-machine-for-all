@@ -7,7 +7,7 @@ Before publishing a fork, run `npm run audit:public-release`.
 
 ## Report a vulnerability
 
-Use [GitHub's private vulnerability reporting](https://github.com/cfgauss-ai/social-machine-for-all/security/advisories/new).
+Use [GitHub's private vulnerability reporting](https://github.com/luisroquette-labs/social-machine-for-all/security/advisories/new).
 Do not open a public issue or include a usable secret, token, customer record or
 credential in a report.
 

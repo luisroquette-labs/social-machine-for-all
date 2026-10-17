@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://cfgauss-ai.github.io/social-machine-for-all/sitemap.xml
+Sitemap: https://luisroquette-labs.github.io/social-machine-for-all/sitemap.xml

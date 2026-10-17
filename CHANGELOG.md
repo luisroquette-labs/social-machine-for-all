@@ -33,4 +33,4 @@ The project follows [Semantic Versioning](https://semver.org/).
 - ESLint and production build.
 - Runtime dependency audit with no known high or critical vulnerabilities.
 
-[0.1.0]: https://github.com/cfgauss-ai/social-machine-for-all/releases/tag/v0.1.0
+[0.1.0]: https://github.com/luisroquette-labs/social-machine-for-all/releases/tag/v0.1.0
