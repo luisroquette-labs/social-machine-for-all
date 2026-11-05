@@ -11,7 +11,6 @@
 import { generateText } from 'ai'
 import { deepseek } from '@ai-sdk/deepseek'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
-import { resolveJevRoute } from './jev-router'
 
 const MAX_RETRIES = 3
 const RETRY_DELAYS_MS = [1_000, 3_000, 7_000]
@@ -77,7 +76,6 @@ export async function generateTextWithFallback(options: {
   primary?: 'deepseek' | 'gemini'
 }): Promise<string> {
   const useGeminiFirst = options.primary === 'gemini'
-  const jevRoute = resolveJevRoute()
 
   const callDeepSeek = () => retryOnTransient(
     () => generateText({
@@ -114,34 +112,9 @@ export async function generateTextWithFallback(options: {
     ).then(r => r.text.trim())
   }
 
-  const callJev = () => {
-    const openRouterApiKey = process.env.OPENROUTER_API_KEY
-    if (!openRouterApiKey) return Promise.reject(new Error('OPENROUTER_API_KEY not configured'))
-    const openrouter = createOpenRouter({ apiKey: openRouterApiKey })
-    return retryOnTransient(
-      () => generateText({
-        model: openrouter(jevRoute.model),
-        system: options.system,
-        prompt: options.prompt,
-        temperature: options.temperature,
-        maxOutputTokens: options.maxOutputTokens,
-        providerOptions: jevRoute.providerOptions,
-      }),
-      'jev',
-    ).then(r => r.text.trim())
-  }
-
   const [primary, secondary, primaryLabel, secondaryLabel] = useGeminiFirst
     ? [callGemini, callDeepSeek, 'Gemini', 'DeepSeek']
     : [callDeepSeek, callGemini, 'DeepSeek', 'Gemini']
-
-  if (jevRoute.enabled) {
-    try {
-      return await callJev()
-    } catch (error) {
-      console.warn('[ai-fallback] Jev indisponível — usando a cadeia fixa', { error: String(error) })
-    }
-  }
 
   try {
     return await primary()

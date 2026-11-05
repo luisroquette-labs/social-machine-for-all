@@ -1,7 +1,5 @@
 import { generateText, stepCountIs } from 'ai'
 import { getModel, getModelViaOpenRouter } from './provider'
-import { createOpenRouter } from '@openrouter/ai-sdk-provider'
-import { resolveJevRoute } from './jev-router'
 
 export interface ToolDefinition {
   name: string
@@ -115,20 +113,9 @@ export async function executeToolLoop(options: ToolLoopOptions): Promise<ToolLoo
       } }),
     })
 
-  const jevRoute = resolveJevRoute()
-  const jevKey = process.env.OPENROUTER_API_KEY
   const openRouterModel = getModelViaOpenRouter(model)
   let result: Awaited<ReturnType<typeof runGenerate>>
-  if (jevRoute.enabled && jevKey) {
-    try {
-      result = await runGenerate(createOpenRouter({ apiKey: jevKey })(jevRoute.model), true, jevRoute.providerOptions)
-    } catch (err) {
-      console.warn('[tool-loop] Jev failed — restarting full loop on fixed fallback:', err instanceof Error ? err.message : err)
-      result = openRouterModel
-        ? await runGenerate(openRouterModel, true)
-        : await runGenerate(getModel(model), false)
-    }
-  } else if (openRouterModel) {
+  if (openRouterModel) {
     try {
       result = await runGenerate(openRouterModel, true)
     } catch (err) {
@@ -189,20 +176,9 @@ export async function generateSimpleText(options: {
       } }),
     })
 
-  const jevRoute = resolveJevRoute()
-  const jevKey = process.env.OPENROUTER_API_KEY
   const openRouterModel = getModelViaOpenRouter(options.model)
   let result: Awaited<ReturnType<typeof runGenerate>>
-  if (jevRoute.enabled && jevKey) {
-    try {
-      result = await runGenerate(createOpenRouter({ apiKey: jevKey })(jevRoute.model), true, jevRoute.providerOptions)
-    } catch (err) {
-      console.warn('[tool-loop] Jev failed — falling back to fixed model:', err instanceof Error ? err.message : err)
-      result = openRouterModel
-        ? await runGenerate(openRouterModel, true)
-        : await runGenerate(getModel(options.model), false)
-    }
-  } else if (openRouterModel) {
+  if (openRouterModel) {
     try {
       result = await runGenerate(openRouterModel, true)
     } catch (err) {
