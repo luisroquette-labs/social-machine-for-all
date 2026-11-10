@@ -26,10 +26,10 @@ export async function generatebrandReelCover(params: {
   const supabase = getAdminClient()
   const base = getBaseUrl()
 
-  // ── Step 1: Generate photorealistic 9:16 background (Gemini → gpt-image-1 fallback) ───
+  // ── Step 1: Generate a vertical background through OpenRouter BYOK ───
   const bgBuffer = await generateBackground(params.imagePrompt)
   if (!bgBuffer) {
-    console.warn('[brand-reel-cover] All providers failed — Satori-only cover (no bg photo)')
+    console.warn('[brand-reel-cover] OpenRouter BYOK image generation failed — Satori-only cover (no bg photo)')
   }
 
   let bgUrl = ''

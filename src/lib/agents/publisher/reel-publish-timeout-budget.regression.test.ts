@@ -117,13 +117,10 @@ describe('REGRESSÃO: orçamento de timeout do publish de Reel cabe no maxDurati
     // Pior caso: disparo + (deadline de polling + 1 intervalo + 1 timeout de poll na última iteração)
     const remotionWorstCaseMs = remotionKickoffTimeoutMs + remotionMaxWaitDefaultMs + remotionPollIntervalMs + remotionPollTimeoutMs
 
-    const bgFnStart = brand_COVER_SRC.indexOf('async function generateBackground')
-    const bgFnBody = brand_COVER_SRC.slice(bgFnStart, brand_COVER_SRC.indexOf('\n}\n', bgFnStart))
-    const bgTimeouts = [...bgFnBody.matchAll(/AbortSignal\.timeout\((\d[\d_]*)\)/g)].map(m => Number(m[1].replace(/_/g, '')))
-    expect(bgTimeouts.length).toBe(2) // Gemini + gpt-image-1 fallback (sequencial)
+    const imageTimeoutMs = extractNumber(brand_COVER_SRC, 'callOpenRouterImage(prompt, ')
     const satoriSectionSrc = brand_COVER_SRC.slice(brand_COVER_SRC.indexOf('Render editorial overlay via Satori'))
     const satoriTimeoutMs = extractNumber(satoriSectionSrc, 'signal: AbortSignal.timeout(')
-    const brandCoverWorstCaseMs = bgTimeouts[0] + bgTimeouts[1] + satoriTimeoutMs
+    const brandCoverWorstCaseMs = imageTimeoutMs + satoriTimeoutMs
 
     const parallelStepWorstCaseMs = Math.max(remotionWorstCaseMs, brandCoverWorstCaseMs)
 
@@ -147,7 +144,7 @@ describe('REGRESSÃO: orçamento de timeout do publish de Reel cabe no maxDurati
   it('soma do pior caso do pipeline Slideshow (TYPE 2: slides em paralelo + render + Instagram, tudo sequencial entre si) cabe com folga em 300s', () => {
     // TYPE 2 não tem etapa paralela entre geração de conteúdo e render — a geração de
     // slides roda ANTES do render, então os custos são ADITIVOS, não bounded pelo maior.
-    const slideImageWorstCaseMs = extractNumber(OPENAI_IMAGE_SRC, 'signal: AbortSignal.timeout(')
+    const slideImageWorstCaseMs = extractNumber(OPENAI_IMAGE_SRC, 'callOpenRouterImage(prompt, ')
 
     const slideshowMaxWaitMs = (() => {
       const callSite = PUBLISHER_SRC.slice(PUBLISHER_SRC.indexOf("renderWithRemotion('SlideshowReel'"))

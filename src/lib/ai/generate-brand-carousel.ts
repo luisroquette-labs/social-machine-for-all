@@ -48,7 +48,7 @@ export async function generatebrandCarousel(params: {
 
   // ── Step 1: Generate all backgrounds in parallel ────────────────────────
   // Each slide uses its own prompt (if provided) or the shared base prompt.
-  // Gemini Imagen 4.0 produces a different composition even with the same prompt.
+  // Each request can produce a different composition even with the same prompt.
   const bgBuffers = await Promise.all(
     params.slides.map((slide, i) =>
       generateBackground(slide.image_prompt ?? params.imagePrompt, i)

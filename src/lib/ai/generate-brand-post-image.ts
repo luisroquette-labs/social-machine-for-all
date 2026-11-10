@@ -27,10 +27,10 @@ export async function generatebrandPostImage(params: {
   const supabase = getAdminClient()
   const base = getBaseUrl()
 
-  // ── Step 1: Generate photorealistic background (Gemini → gpt-image-1 fallback) ──────
+  // ── Step 1: Generate photorealistic background through OpenRouter BYOK ──────
   const bgBuffer = await generateBackground(params.imagePrompt)
   if (!bgBuffer) {
-    console.error('[brand-image] All image providers failed — aborting')
+    console.error('[brand-image] OpenRouter BYOK image generation failed — aborting')
     return null
   }
 
