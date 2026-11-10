@@ -55,11 +55,15 @@ export async function executeToolLoop(options: ToolLoopOptions): Promise<ToolLoo
   // asSchema() detects ~standard interface and converts via z4.toJSONSchema().
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const aiTools: Record<string, any> = {}
+  let toolExecutionStarted = false
   for (const def of toolDefs) {
     aiTools[def.name] = {
       description: def.description,
       inputSchema: def.parameters,
-      execute: def.execute,
+      execute: async (params: unknown) => {
+        toolExecutionStarted = true
+        return def.execute(params)
+      },
     }
   }
 
@@ -98,6 +102,7 @@ export async function executeToolLoop(options: ToolLoopOptions): Promise<ToolLoo
   try {
     result = await runGenerate(getModel(model, 'openai'))
   } catch (error) {
+    if (toolExecutionStarted) throw error
     console.warn(`[tool-loop] OpenAI BYOK failed for "${model}"; retrying with Anthropic BYOK`, error)
     result = await runGenerate(getModel(model, 'anthropic'))
   }

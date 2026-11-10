@@ -41,6 +41,25 @@ describe('tool-loop routes only through OpenRouter BYOK', () => {
     expect(mockGenerateText.mock.calls[0][0].model.id).toBe('openai/gpt-6.1-sol')
   })
 
+  it('does not retry after a tool starts executing', async () => {
+    vi.stubEnv('OPENROUTER_API_KEY', 'test-key')
+    const execute = vi.fn().mockResolvedValue('published')
+    mockGenerateText.mockImplementationOnce(async ({ tools }) => {
+      await tools.publish.execute({ id: 'post-1' })
+      throw new Error('OpenAI failed after tool execution')
+    })
+
+    await expect(executeToolLoop({
+      model: 'claude-sonnet',
+      systemPrompt: 'sys',
+      messages: [{ role: 'user', content: 'publish' }],
+      tools: [{ name: 'publish', description: 'Publish a post', parameters: {}, execute }],
+    })).rejects.toThrow('OpenAI failed after tool execution')
+
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(mockGenerateText).toHaveBeenCalledTimes(1)
+  })
+
   it('restarts on Anthropic BYOK after an OpenAI failure', async () => {
     vi.stubEnv('OPENROUTER_API_KEY', 'test-key')
     mockGenerateText
