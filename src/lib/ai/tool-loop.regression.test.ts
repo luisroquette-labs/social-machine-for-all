@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { readFileSync } from 'fs'
 
 const mockGenerateText = vi.fn()
 const route = vi.fn((id: string, settings?: unknown) => ({ id, settings }))
@@ -16,6 +17,11 @@ afterEach(() => {
 })
 
 describe('tool-loop routes only through OpenRouter BYOK', () => {
+  it('keeps externally controlled model names out of log format strings', () => {
+    const source = readFileSync(new URL('./tool-loop.ts', import.meta.url), 'utf8')
+    expect(source).not.toContain('failed for "${')
+  })
+
   it('fails closed without OPENROUTER_API_KEY', async () => {
     vi.stubEnv('OPENROUTER_API_KEY', '')
     await expect(generateSimpleText({ model: 'claude-haiku', systemPrompt: 'sys', userMessage: 'hi' }))

@@ -103,7 +103,7 @@ export async function executeToolLoop(options: ToolLoopOptions): Promise<ToolLoo
     result = await runGenerate(getModel(model, 'openai'))
   } catch (error) {
     if (toolExecutionStarted) throw error
-    console.warn(`[tool-loop] OpenAI BYOK failed for "${model}"; retrying with Anthropic BYOK`, error)
+    console.warn('[tool-loop] OpenAI BYOK failed; retrying with Anthropic BYOK', { model, error })
     result = await runGenerate(getModel(model, 'anthropic'))
   }
 
@@ -155,7 +155,10 @@ export async function generateSimpleText(options: {
   try {
     result = await runGenerate(getModel(options.model, 'openai'))
   } catch (error) {
-    console.warn(`[tool-loop] OpenAI BYOK failed for "${options.model}"; retrying with Anthropic BYOK`, error)
+    console.warn('[tool-loop] OpenAI BYOK failed; retrying with Anthropic BYOK', {
+      model: options.model,
+      error,
+    })
     result = await runGenerate(getModel(options.model, 'anthropic'))
   }
 
