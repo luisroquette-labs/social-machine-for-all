@@ -1,96 +1,85 @@
-import { anthropic } from '@ai-sdk/anthropic'
-import { deepseek } from '@ai-sdk/deepseek'
 import { createOpenRouter } from '@openrouter/ai-sdk-provider'
 
-export type ModelProvider = 'anthropic' | 'deepseek'
-
-export interface ModelConfig {
-  provider: ModelProvider
-  modelId: string
+export const OPENROUTER_APP_HEADERS: Record<string, string> = {
+  'HTTP-Referer': 'https://luisroquette-labs.github.io/social-machine-for-all/',
+  'X-Title': 'Social Machine for All',
 }
 
-// 21/07/2026: 'deepseek-chat'/'deepseek-reasoner' (nomes de modelo, não os nomes
-// amigáveis abaixo) serão descontinuados pela DeepSeek em 2026-07-24 15:59 UTC —
-// os dois passam a corresponder ao modo non-thinking e thinking de 'deepseek-v4-flash'
-// respectivamente. 'deepseek-chat' (usado ativamente — default de writer/curator/
-// publisher/monitor/engagement) já migrado. 'deepseek-reasoner' NÃO é chamado em
-// nenhum lugar do código hoje (verificado via grep) — deixado apontando pro nome
-// antigo de propósito, pra não colidir com 'deepseek-chat' no MODEL_ID_ALIASES
-// (os dois mapeando pro mesmo modelId 'deepseek-v4-flash' quebraria a resolução
-// reversa). Se algum dia for ativado, migrar junto com tool-loop.ts passando
-// thinking:{type:'enabled'} em vez de 'disabled'.
-const MODELS: Record<string, ModelConfig> = {
-  'claude-sonnet': { provider: 'anthropic', modelId: 'claude-sonnet-4-6' },
-  'claude-haiku': { provider: 'anthropic', modelId: 'claude-haiku-4-5-20251001' },
-  'deepseek-chat': { provider: 'deepseek', modelId: 'deepseek-v4-flash' },
-  'deepseek-reasoner': { provider: 'deepseek', modelId: 'deepseek-reasoner' },
+type ByokCapability = 'fast' | 'quality' | 'critical'
+
+const BYOK_CHAINS: Record<ByokCapability, readonly [string, string]> = {
+  fast: ['openai/gpt-5-nano', 'anthropic/claude-haiku-5.5'],
+  quality: ['openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5.5'],
+  critical: ['openai/gpt-6-astra', 'anthropic/claude-opus-5.5'],
 }
 
-// Reverse lookup: raw provider model IDs (e.g. 'claude-sonnet-4-6') occasionally
-// leak into workspace_settings values instead of the friendly key ('claude-sonnet')
-// — found 2026-07-19 in instagram-comments/route.ts's fallback default and in
-// stored writer_model settings for two workspaces. Resolving both here means a
-// value already saved in either format keeps working instead of throwing.
-const MODEL_ID_ALIASES: Record<string, string> = Object.fromEntries(
-  Object.entries(MODELS).map(([friendlyName, config]) => [config.modelId, friendlyName]),
-)
+const MODEL_CAPABILITIES: Record<string, ByokCapability> = {
+  'claude-sonnet': 'quality',
+  'claude-haiku': 'fast',
+  'deepseek-chat': 'quality',
+  'deepseek-reasoner': 'critical',
+}
+
+const MODEL_ID_ALIASES: Record<string, string> = {
+  'claude-sonnet-4-6': 'claude-sonnet',
+  'claude-haiku-4-5-20251001': 'claude-haiku',
+  'deepseek-v4-flash': 'deepseek-chat',
+}
 
 function resolveModelName(modelName: string): string {
-  return MODELS[modelName] ? modelName : (MODEL_ID_ALIASES[modelName] ?? modelName)
+  return MODEL_CAPABILITIES[modelName] ? modelName : (MODEL_ID_ALIASES[modelName] ?? modelName)
 }
 
-export function getModel(modelName: string) {
-  const config = MODELS[resolveModelName(modelName)]
-  if (!config) {
-    throw new Error(`Unknown model: ${modelName}. Available: ${Object.keys(MODELS).join(', ')}`)
+export async function byokFetch(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  fetchImpl: typeof fetch = fetch,
+): Promise<Response> {
+  const response = await fetchImpl(input, init)
+  if (!response.ok) return response
+
+  const data = await response.clone().json().catch(() => null) as {
+    model?: unknown
+    usage?: { is_byok?: unknown }
+  } | null
+  const request = typeof init?.body === 'string'
+    ? JSON.parse(init.body) as { model?: unknown; models?: unknown }
+    : {}
+  const models = Array.isArray(request.models)
+    ? request.models.filter((model): model is string => typeof model === 'string')
+    : typeof request.model === 'string' ? [request.model] : []
+
+  if (data?.usage?.is_byok !== true) {
+    await response.body?.cancel().catch(() => undefined)
+    return Response.json({ error: data?.usage?.is_byok === false ? 'BYOK_POLICY_VIOLATION' : 'BYOK_UNVERIFIED' }, { status: 403 })
+  }
+  if (typeof data.model !== 'string' || !models.includes(data.model)) {
+    await response.body?.cancel().catch(() => undefined)
+    return Response.json({ error: 'BYOK_MODEL_MISMATCH' }, { status: 403 })
+  }
+  return response
+}
+
+export function getModel(modelName: string, provider: 'openai' | 'anthropic' = 'openai') {
+  const capability = MODEL_CAPABILITIES[resolveModelName(modelName)]
+  if (!capability) {
+    throw new Error(`Unknown model: ${modelName}. Available: ${Object.keys(MODEL_CAPABILITIES).join(', ')}`)
   }
 
-  switch (config.provider) {
-    case 'anthropic':
-      return anthropic(config.modelId)
-    case 'deepseek':
-      return deepseek(config.modelId)
-    default:
-      throw new Error(`Unknown provider: ${config.provider}`)
-  }
+  const apiKey = process.env.OPENROUTER_API_KEY
+  if (!apiKey) throw new Error('OPENROUTER_API_KEY not configured')
+
+  const model = BYOK_CHAINS[capability][provider === 'openai' ? 0 : 1]
+  return createOpenRouter({ apiKey, headers: OPENROUTER_APP_HEADERS, fetch: byokFetch })(model, {
+    provider: {
+      only: [provider],
+      allow_fallbacks: false,
+      require_parameters: true,
+    },
+    usage: { include: true },
+  })
 }
 
 export function listModels(): string[] {
-  return Object.keys(MODELS)
-}
-
-// Separate table (not derived from MODELS) so a friendly name can be excluded
-// from the OpenRouter tier without touching direct-provider behavior. Slugs
-// verified against openrouter.ai — they differ from the direct API model IDs
-// above (dots instead of hyphens, no date suffix on Haiku).
-//
-// deepseek-chat/deepseek-reasoner are DELIBERATELY excluded here — verified
-// 2026-07-19 by comparing identical prompts against the direct DeepSeek API
-// vs OpenRouter's 'deepseek/deepseek-chat' route (served by "DeepInfra"):
-// direct correctly self-identifies as DeepSeek-V3, but the OpenRouter route
-// self-identified as GPT-4-0613 — a genuinely different model behind the
-// same slug, not a self-identification quirk. 'deepseek/deepseek-reasoner'
-// is also not a valid OpenRouter model ID at all. deepseek-chat is the
-// default model for writer/curator/publisher/monitor/engagement agents, so
-// silently routing it through a different model would have been a real
-// regression. Both names return null here — those agents always go direct.
-const OPENROUTER_MODELS: Record<string, string> = {
-  'claude-sonnet': 'anthropic/claude-sonnet-4.6',
-  'claude-haiku': 'anthropic/claude-haiku-4.5',
-}
-
-/**
- * Resolve a friendly model name to an OpenRouter-backed model. Returns null
- * (never throws) when OPENROUTER_API_KEY is unset or the name has no
- * OpenRouter mapping — callers must treat null as "skip this tier".
- */
-export function getModelViaOpenRouter(modelName: string) {
-  const apiKey = process.env.OPENROUTER_API_KEY
-  if (!apiKey) return null
-
-  const openRouterModelId = OPENROUTER_MODELS[resolveModelName(modelName)]
-  if (!openRouterModelId) return null
-
-  const openrouter = createOpenRouter({ apiKey })
-  return openrouter(openRouterModelId)
+  return Object.keys(MODEL_CAPABILITIES)
 }

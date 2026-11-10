@@ -6,20 +6,24 @@
  * nenhum alerta — o heartbeat checava token IG e créditos do Twitter, mas não a
  * OpenAI. Este probe fecha essa lacuna de monitoramento.
  *
- * Faz uma chamada mínima (gpt-4o-mini, 1 token, ~fração de centavo) e retorna true
+ * Faz uma chamada mínima (GPT-5 Nano via OpenAI BYOK, 1 token) e retorna true
  * SOMENTE em 429 de quota/billing (insufficient_quota). NUNCA retorna true em
  * rate-limit transitório, erro de rede ou 5xx — para não disparar alerta crítico à
  * toa. insufficient_quota é a nível de conta (billing), então o probe de texto
  * detecta corretamente o problema que também trava o gpt-image-1.
  */
+import { byokFetch, OPENROUTER_APP_HEADERS } from './provider'
+
 export async function isOpenAiQuotaExceeded(apiKey: string, timeoutMs = 15_000): Promise<boolean> {
   if (!apiKey) return false
   try {
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+    const res = await byokFetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', ...OPENROUTER_APP_HEADERS },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'openai/gpt-5-nano',
+        provider: { only: ['openai'], allow_fallbacks: false },
+        usage: { include: true },
         max_tokens: 1,
         messages: [{ role: 'user', content: 'ping' }],
       }),

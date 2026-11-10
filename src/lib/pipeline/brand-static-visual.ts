@@ -203,7 +203,7 @@ async function fetchStaticImageAsset(url: string): Promise<StaticImageFetchedAss
 }
 
 export async function judgeStaticImageMultimodal(asset: StaticImageFetchedAsset): Promise<StaticImageMultimodalJudgment | null> {
-  if (!process.env.ANTHROPIC_API_KEY) return null
+  if (!process.env.OPENROUTER_API_KEY) return null
 
   try {
     const result = await executeToolLoop({

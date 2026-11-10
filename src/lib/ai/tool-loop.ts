@@ -1,5 +1,5 @@
 import { generateText, stepCountIs } from 'ai'
-import { getModel, getModelViaOpenRouter } from './provider'
+import { getModel } from './provider'
 
 export interface ToolDefinition {
   name: string
@@ -44,11 +44,9 @@ export async function executeToolLoop(options: ToolLoopOptions): Promise<ToolLoo
   const {
     model,
     systemPrompt,
-    messages,
     tools: toolDefs = [],
     maxSteps = 5,
     maxTokens = 4096,
-    temperature = 0.7,
   } = options
 
   // Build tools for AI SDK.
@@ -85,7 +83,7 @@ export async function executeToolLoop(options: ToolLoopOptions): Promise<ToolLoo
   })
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const runGenerate = (resolvedModel: any, viaOpenRouter: boolean, providerOptions?: Parameters<typeof generateText>[0]['providerOptions']) =>
+  const runGenerate = (resolvedModel: any) =>
     generateText({
       model: resolvedModel,
       system: systemPrompt,
@@ -94,36 +92,14 @@ export async function executeToolLoop(options: ToolLoopOptions): Promise<ToolLoo
       tools: Object.keys(aiTools).length > 0 ? aiTools : undefined,
       stopWhen: stepCountIs(maxSteps),
       maxOutputTokens: maxTokens,
-      temperature,
-      // Omitted for the OpenRouter tier — passthrough of Anthropic's
-      // cache_control via @openrouter/ai-sdk-provider isn't confirmed, so this
-      // is a cost-only tradeoff (no caching discount on that tier), not a
-      // correctness one.
-      //
-      // deepseek.thinking:disabled (21/07/2026): 'deepseek-v4-flash' (o que
-      // 'deepseek-chat' virou após a migração de 24/07) entra em modo "thinking"
-      // por padrão se esse parâmetro não for passado — verificado ao vivo,
-      // gastou o orçamento inteiro de tokens "pensando" e devolveu resposta
-      // vazia. Cada provider só lê sua própria chave em providerOptions, então
-      // não tem conflito em mandar as duas juntas pra um model reference que
-      // não é nem Anthropic nem DeepSeek.
-      ...(viaOpenRouter ? { providerOptions } : { providerOptions: {
-        anthropic: { cacheControl: { type: 'ephemeral' } },
-        deepseek: { thinking: { type: 'disabled' } },
-      } }),
     })
 
-  const openRouterModel = getModelViaOpenRouter(model)
   let result: Awaited<ReturnType<typeof runGenerate>>
-  if (openRouterModel) {
-    try {
-      result = await runGenerate(openRouterModel, true)
-    } catch (err) {
-      console.warn(`[tool-loop] OpenRouter failed for "${model}" — restarting full loop on direct provider:`, err instanceof Error ? err.message : err)
-      result = await runGenerate(getModel(model), false)
-    }
-  } else {
-    result = await runGenerate(getModel(model), false)
+  try {
+    result = await runGenerate(getModel(model, 'openai'))
+  } catch (error) {
+    console.warn(`[tool-loop] OpenAI BYOK failed for "${model}"; retrying with Anthropic BYOK`, error)
+    result = await runGenerate(getModel(model, 'anthropic'))
   }
 
   // Collect tool calls from all steps
@@ -162,31 +138,20 @@ export async function generateSimpleText(options: {
   temperature?: number
 }): Promise<{ text: string; tokensUsed: number }> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const runGenerate = (resolvedModel: any, viaOpenRouter: boolean, providerOptions?: Parameters<typeof generateText>[0]['providerOptions']) =>
+  const runGenerate = (resolvedModel: any) =>
     generateText({
       model: resolvedModel,
       system: options.systemPrompt,
       messages: [{ role: 'user', content: options.userMessage }],
       maxOutputTokens: options.maxTokens ?? 4096,
-      temperature: options.temperature ?? 0.7,
-      // deepseek.thinking:disabled (21/07/2026) — ver comentário em executeToolLoop() acima.
-      ...(viaOpenRouter ? { providerOptions } : { providerOptions: {
-        anthropic: { cacheControl: { type: 'ephemeral' } },
-        deepseek: { thinking: { type: 'disabled' } },
-      } }),
     })
 
-  const openRouterModel = getModelViaOpenRouter(options.model)
   let result: Awaited<ReturnType<typeof runGenerate>>
-  if (openRouterModel) {
-    try {
-      result = await runGenerate(openRouterModel, true)
-    } catch (err) {
-      console.warn(`[tool-loop] OpenRouter failed for "${options.model}" — falling back to direct provider:`, err instanceof Error ? err.message : err)
-      result = await runGenerate(getModel(options.model), false)
-    }
-  } else {
-    result = await runGenerate(getModel(options.model), false)
+  try {
+    result = await runGenerate(getModel(options.model, 'openai'))
+  } catch (error) {
+    console.warn(`[tool-loop] OpenAI BYOK failed for "${options.model}"; retrying with Anthropic BYOK`, error)
+    result = await runGenerate(getModel(options.model, 'anthropic'))
   }
 
   return {

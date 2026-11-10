@@ -197,10 +197,10 @@ export async function GET(request: Request) {
     } catch { /* falha de rede transitória — não marca como expirado */ }
   }
 
-  // Check: OpenAI quota/billing — probe ativo barato (gpt-4o-mini, 1 token).
+  // Check: OpenAI quota/billing — probe ativo barato (GPT-5 Nano BYOK, 1 token).
   // A quota da OpenAI estourou em jun/2026 e travou as capas de reel por dias sem
   // alerta. Este check fecha a lacuna. Só marca true em insufficient_quota/billing.
-  const openaiQuotaExceeded = await isOpenAiQuotaExceeded(process.env.OPENAI_API_KEY ?? '')
+  const openaiQuotaExceeded = await isOpenAiQuotaExceeded(process.env.OPENROUTER_API_KEY ?? '')
 
   // Check: no reels produced in 24h (pipeline may be stuck)
   const noReelsProduced = !recentReelRuns?.length

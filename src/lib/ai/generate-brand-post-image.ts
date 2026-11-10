@@ -2,8 +2,7 @@
  * Generate a Brand branded feed image.
  *
  * Pipeline:
- * 1. Gemini image generation → photorealistic dark background (EV/industrial scene)
- *    Fallback: gpt-image-1 medium ($0.042/img) if Gemini fails
+ * 1. OpenAI image generation through OpenRouter BYOK
  * 2. /api/og/brand-post (Satori) → editorial overlay (headline + KPI + branding)
  * 3. Result uploaded to Supabase storage → public URL returned
  */
@@ -14,81 +13,8 @@ import { detectBrand, resolveLogoUrl } from './brand-logos'
 import { callOpenRouterImage } from './openrouter'
 
 const BUCKET = 'brand-assets'
-const GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image'
-
 async function generateBackground(prompt: string): Promise<Buffer | null> {
-  // 0. OpenRouter — single attempt, no retry. The Gemini→gpt-image-1 cascade
-  // below is untouched and remains the fallback. Opt-in via OPENROUTER_API_KEY.
-  const openRouterBuf = await callOpenRouterImage(prompt)
-  if (openRouterBuf) {
-    console.log('[brand-image] ✓ OpenRouter (gemini-2.5-flash-image)')
-    return openRouterBuf
-  }
-
-  // 1. Gemini image generation primary
-  const geminiKey = (process.env.GEMINI_API_KEY_2 ?? process.env.GEMINI_API_KEY ?? '').trim()
-  if (geminiKey) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: `${prompt}\n\nVertical 3:4 portrait image. No text, no logos.` }] }],
-            generationConfig: { responseModalities: ['IMAGE', 'TEXT'], imageConfig: { aspectRatio: '3:4' } },
-          }),
-          signal: AbortSignal.timeout(90_000),
-        },
-      )
-      if (res.ok) {
-        const data = await res.json() as {
-          candidates?: Array<{
-            content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string }, inline_data?: { mime_type?: string; data?: string } }> }
-          }>
-        }
-        const parts = data.candidates?.[0]?.content?.parts ?? []
-        const imagePart = parts.find((part) =>
-          part.inlineData?.mimeType?.startsWith('image/') || part.inline_data?.mime_type?.startsWith('image/')
-        )
-        const b64 = imagePart?.inlineData?.data ?? imagePart?.inline_data?.data
-        if (b64) return Buffer.from(b64, 'base64')
-      }
-      console.warn('[brand-image] Gemini failed (status', res.status, ') — trying gpt-image-1 fallback...')
-    } catch (err) {
-      console.warn('[brand-image] Gemini exception:', err instanceof Error ? err.message : err, '— trying gpt-image-1...')
-    }
-  }
-
-  // 2. gpt-image-1 medium fallback ($0.042/img)
-  const openaiKey = process.env.OPENAI_API_KEY
-  if (!openaiKey) return null
-  try {
-    const res = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'gpt-image-1',
-        prompt,
-        n: 1,
-        size: '1024x1536',  // vertical mais próximo de 3:4 no gpt-image-1; o Satori cobre/recorta para 1080x1440
-        quality: 'medium',
-        output_format: 'png',
-      }),
-      signal: AbortSignal.timeout(90_000),
-    })
-    if (!res.ok) {
-      console.error('[brand-image] gpt-image-1 error:', res.status, await res.text().catch(() => ''))
-      return null
-    }
-    const data = await res.json() as { data?: Array<{ b64_json?: string }> }
-    const b64 = data.data?.[0]?.b64_json
-    if (!b64) return null
-    return Buffer.from(b64, 'base64')
-  } catch (err) {
-    console.error('[brand-image] gpt-image-1 exception:', err instanceof Error ? err.message : err)
-    return null
-  }
+  return callOpenRouterImage(prompt)
 }
 
 export async function generatebrandPostImage(params: {
