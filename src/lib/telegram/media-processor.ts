@@ -2,6 +2,8 @@
  * Telegram media processor — downloads and processes photos, voice, and documents.
  */
 
+import { byokFetch, OPENROUTER_APP_HEADERS } from '@/lib/ai/provider'
+
 export interface ProcessedMedia {
   type: 'image' | 'audio' | 'document'
   /** For images: base64 data. For audio/doc: extracted text. */
@@ -60,7 +62,7 @@ export async function processPhoto(
 
 /**
  * Process a voice message or audio file from Telegram.
- * Transcribes using OpenAI Whisper API if OPENAI_API_KEY is available.
+ * Transcribes with OpenAI through OpenRouter BYOK.
  */
 export async function processVoice(
   botToken: string,
@@ -72,30 +74,38 @@ export async function processVoice(
   const ext = filePath.split('.').pop()?.toLowerCase() ?? 'ogg'
   const mimeType = ext === 'mp3' ? 'audio/mpeg' : ext === 'wav' ? 'audio/wav' : 'audio/ogg'
 
-  // Try transcription with OpenAI Whisper
-  const apiKey = process.env.OPENAI_API_KEY
+  const apiKey = process.env.OPENROUTER_API_KEY
   if (apiKey) {
     try {
-      const formData = new FormData()
-      const blob = new Blob([new Uint8Array(buffer)], { type: mimeType })
-      formData.append('file', blob, `audio.${ext}`)
-      formData.append('model', 'whisper-1')
-      formData.append('language', 'pt')
-
-      const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      const model = 'openai/gpt-audio-mini'
+      const res = await byokFetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: formData,
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', ...OPENROUTER_APP_HEADERS },
+        body: JSON.stringify({
+          model,
+          provider: { only: ['openai'], allow_fallbacks: false, require_parameters: true },
+          usage: { include: true },
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Transcreva este áudio em português. Retorne somente a transcrição.' },
+              { type: 'input_audio', input_audio: { data: buffer.toString('base64'), format: ext === 'oga' ? 'ogg' : ext } },
+            ],
+          }],
+        }),
+        signal: AbortSignal.timeout(90_000),
       })
 
       if (res.ok) {
-        const data = await res.json()
-        const text = data.text as string
-        return {
-          type: 'audio',
-          data: text,
-          mimeType,
-          description: `Audio transcrito (${duration}s): "${text.slice(0, 100)}${text.length > 100 ? '...' : ''}"`,
+        const data = await res.json() as { choices?: Array<{ message?: { content?: unknown } }> }
+        const text = data.choices?.[0]?.message?.content
+        if (typeof text === 'string' && text.trim()) {
+          return {
+            type: 'audio',
+            data: text,
+            mimeType,
+            description: `Audio transcrito (${duration}s): "${text.slice(0, 100)}${text.length > 100 ? '...' : ''}"`,
+          }
         }
       }
     } catch (err) {
@@ -108,7 +118,7 @@ export async function processVoice(
     type: 'audio',
     data: '',
     mimeType,
-    description: `Audio recebido (${duration}s) — transcricao nao disponivel (OPENAI_API_KEY nao configurada)`,
+    description: `Audio recebido (${duration}s) — transcricao nao disponivel`,
   }
 }
 

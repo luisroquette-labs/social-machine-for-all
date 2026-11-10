@@ -243,12 +243,10 @@ export async function GET(request: Request) {
   }
 
   // ── Pre-flight: image provider availability ──
-  const hasOpenAI   = !!process.env.OPENAI_API_KEY
-  const hasGemini1  = !!process.env.GEMINI_API_KEY_1
-  const hasGemini2  = !!process.env.GEMINI_API_KEY_2
-  console.log(`[reels-prepare-brand] Image providers: OpenAI=${hasOpenAI}, Gemini1=${hasGemini1}, Gemini2=${hasGemini2}`)
-  if (!hasOpenAI && !hasGemini1 && !hasGemini2) {
-    Sentry.captureMessage('reels-prepare-brand: no image providers configured — OPENAI_API_KEY, GEMINI_API_KEY_1, GEMINI_API_KEY_2 all missing', { level: 'error' })
+  const hasOpenRouter = !!process.env.OPENROUTER_API_KEY
+  console.log(`[reels-prepare-brand] OpenRouter BYOK image provider: ${hasOpenRouter}`)
+  if (!hasOpenRouter) {
+    Sentry.captureMessage('reels-prepare-brand: OPENROUTER_API_KEY missing', { level: 'error' })
   }
 
   const prepared: string[] = []

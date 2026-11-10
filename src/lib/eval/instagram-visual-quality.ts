@@ -1,4 +1,5 @@
 import { parseAIJson } from '@/lib/ai/parse-json'
+import { byokFetch, OPENROUTER_APP_HEADERS } from '@/lib/ai/provider'
 
 export interface InstagramVisualQualityScores {
   visual_quality: number
@@ -86,14 +87,14 @@ export async function reviewInstagramVisualQuality(input: {
   format: 'image' | 'carousel' | 'reel'
   assets: VisualAsset[]
 }): Promise<InstagramVisualQualityResult> {
-  const apiKey = (process.env.GEMINI_API_KEY_2 ?? process.env.GEMINI_API_KEY ?? '').trim()
-  if (!apiKey) return unavailableResult('visual_quality_reviewer_unavailable:missing_gemini_key')
+  const apiKey = (process.env.OPENROUTER_API_KEY ?? '').trim()
+  if (!apiKey) return unavailableResult('visual_quality_reviewer_unavailable:missing_openrouter_key')
 
   try {
     const imageParts = await loadImageParts(input.assets)
     if (imageParts.length === 0) return unavailableResult('visual_quality_reviewer_unavailable:no_reviewable_image')
 
-    const model = process.env.INSTAGRAM_QUALITY_REVIEW_MODEL?.trim() || 'gemini-3-flash-preview'
+    const models = ['openai/gpt-6.1-sol', 'anthropic/claude-sonnet-5.5']
     const containsVideo = input.assets.some((asset) => asset.type === 'video')
     const canJudgeSequence = input.format === 'carousel' && !containsVideo
     const prompt = [
@@ -124,28 +125,33 @@ export async function reviewInstagramVisualQuality(input: {
       contentParts.push({ text: `Imagem na posicao ${image.position} da publicacao:` }, image.part)
     }
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-      {
+    let response: Response | null = null
+    for (const [index, model] of models.entries()) {
+      const provider = index === 0 ? 'openai' : 'anthropic'
+      response = await byokFetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', ...OPENROUTER_APP_HEADERS },
         body: JSON.stringify({
-          contents: [{ role: 'user', parts: contentParts }],
-          // thinkingConfig: gemini-3-flash-preview spends part of maxOutputTokens on internal
-          // reasoning (thoughtsTokenCount) before writing the response. Without disabling it,
-          // this call reliably truncated mid-JSON in production (2026-07-18: 862 of 900 tokens
-          // spent thinking, finishReason MAX_TOKENS, killed one @brand post/day for 3 days).
-          generationConfig: { temperature: 0.1, responseMimeType: 'application/json', maxOutputTokens: 900, thinkingConfig: { thinkingBudget: 0 } },
+          model,
+          provider: { only: [provider], allow_fallbacks: false, require_parameters: true },
+          usage: { include: true },
+          max_tokens: 900,
+          messages: [{
+            role: 'user',
+            content: contentParts.map((part) => 'text' in part
+              ? { type: 'text', text: part.text }
+              : { type: 'image_url', image_url: { url: `data:${part.inlineData.mimeType};base64,${part.inlineData.data}` } }),
+          }],
         }),
         signal: AbortSignal.timeout(60_000),
-      },
-    )
-
-    if (!response.ok) return unavailableResult(`visual_quality_reviewer_error:${response.status}`)
-    const data = await response.json() as {
-      candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>
+      })
+      if (response.ok) break
     }
-    const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? '').join('').trim()
+
+    if (!response?.ok) return unavailableResult(`visual_quality_reviewer_error:${response?.status ?? 'unavailable'}`)
+    const data = await response.json() as { choices?: Array<{ message?: { content?: unknown } }> }
+    const content = data.choices?.[0]?.message?.content
+    const text = typeof content === 'string' ? content.trim() : ''
     if (!text) return unavailableResult('visual_quality_reviewer_error:empty_response')
 
     const parsed = parseAIJson<{

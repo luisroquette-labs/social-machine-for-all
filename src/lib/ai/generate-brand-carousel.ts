@@ -2,8 +2,7 @@
  * Generate a Brand branded carousel (multi-image post).
  *
  * Pipeline:
- * 1. Gemini image generation × N slides — all in parallel
- *    Fallback per slide: gpt-image-1 medium ($0.042/img) if Gemini fails
+ * 1. OpenAI image generation through OpenRouter BYOK × N slides, in parallel
  * 2. /api/og/brand-slide (Satori) → N editorial overlays — also in parallel
  * 3. Each slide uploaded to Supabase storage → array of public URLs returned
  */
@@ -14,81 +13,10 @@ import { detectBrand, resolveLogoUrl } from './brand-logos'
 import { callOpenRouterImage } from './openrouter'
 
 const BUCKET = 'brand-assets'
-const GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image'
-
 async function generateBackground(prompt: string, index: number): Promise<Buffer | null> {
-  // 0. OpenRouter — single attempt, no retry, per slide. The Gemini→gpt-image-1
-  // cascade below is untouched and remains the fallback. Opt-in via OPENROUTER_API_KEY.
-  const openRouterBuf = await callOpenRouterImage(prompt)
-  if (openRouterBuf) {
-    console.log(`[brand-carousel] ✓ OpenRouter slide ${index} (gemini-2.5-flash-image)`)
-    return openRouterBuf
-  }
-
-  // 1. Gemini image generation primary
-  const geminiKey = (process.env.GEMINI_API_KEY_2 ?? process.env.GEMINI_API_KEY ?? '').trim()
-  if (geminiKey) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_IMAGE_MODEL}:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: `${prompt}\n\nPortrait 9:16 image. No text, no logos.` }] }],
-            generationConfig: { responseModalities: ['IMAGE', 'TEXT'], imageConfig: { aspectRatio: '9:16' } },
-          }),
-          signal: AbortSignal.timeout(90_000),
-        },
-      )
-      if (res.ok) {
-        const data = await res.json() as {
-          candidates?: Array<{
-            content?: { parts?: Array<{ inlineData?: { mimeType?: string; data?: string }, inline_data?: { mime_type?: string; data?: string } }> }
-          }>
-        }
-        const parts = data.candidates?.[0]?.content?.parts ?? []
-        const imagePart = parts.find((part) =>
-          part.inlineData?.mimeType?.startsWith('image/') || part.inline_data?.mime_type?.startsWith('image/')
-        )
-        const b64 = imagePart?.inlineData?.data ?? imagePart?.inline_data?.data
-        if (b64) return Buffer.from(b64, 'base64')
-      }
-      console.warn(`[brand-carousel] Gemini slide ${index} failed — trying gpt-image-1 fallback...`)
-    } catch (err) {
-      console.warn(`[brand-carousel] Gemini slide ${index} exception:`, err instanceof Error ? err.message : err, '— trying gpt-image-1...')
-    }
-  }
-
-  // 2. gpt-image-1 medium fallback ($0.042/img)
-  const openaiKey = process.env.OPENAI_API_KEY
-  if (!openaiKey) return null
-  try {
-    const res = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'gpt-image-1',
-        prompt,
-        n: 1,
-        size: '1024x1536',
-        quality: 'medium',
-        output_format: 'png',
-      }),
-      signal: AbortSignal.timeout(90_000),
-    })
-    if (!res.ok) {
-      console.error(`[brand-carousel] gpt-image-1 slide ${index} error:`, res.status, await res.text().catch(() => ''))
-      return null
-    }
-    const data = await res.json() as { data?: Array<{ b64_json?: string }> }
-    const b64 = data.data?.[0]?.b64_json
-    if (!b64) return null
-    return Buffer.from(b64, 'base64')
-  } catch (err) {
-    console.error(`[brand-carousel] gpt-image-1 slide ${index} exception:`, err instanceof Error ? err.message : err)
-    return null
-  }
+  const image = await callOpenRouterImage(prompt)
+  if (!image) console.warn(`[brand-carousel] OpenRouter BYOK failed for slide ${index}`)
+  return image
 }
 
 export type CarouselSlide = {
@@ -120,7 +48,7 @@ export async function generatebrandCarousel(params: {
 
   // ── Step 1: Generate all backgrounds in parallel ────────────────────────
   // Each slide uses its own prompt (if provided) or the shared base prompt.
-  // Gemini Imagen 4.0 produces a different composition even with the same prompt.
+  // Each request can produce a different composition even with the same prompt.
   const bgBuffers = await Promise.all(
     params.slides.map((slide, i) =>
       generateBackground(slide.image_prompt ?? params.imagePrompt, i)

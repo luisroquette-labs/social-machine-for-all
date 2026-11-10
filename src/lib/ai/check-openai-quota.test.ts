@@ -18,8 +18,13 @@ afterEach(() => vi.restoreAllMocks())
 
 describe('isOpenAiQuotaExceeded', () => {
   it('200 OK → false (quota saudável)', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res(200, { choices: [{}] })))
+    const fetchMock = vi.fn().mockResolvedValue(res(200, { choices: [{}] }))
+    vi.stubGlobal('fetch', fetchMock)
     expect(await isOpenAiQuotaExceeded('sk-test', 50)).toBe(false)
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body)
+    expect(fetchMock.mock.calls[0][0]).toBe('https://openrouter.ai/api/v1/chat/completions')
+    expect(body.provider).toEqual({ only: ['openai'], allow_fallbacks: false })
+    expect(body.usage).toEqual({ include: true })
   })
 
   it('REGRESSÃO: 429 insufficient_quota → true (billing esgotado)', async () => {

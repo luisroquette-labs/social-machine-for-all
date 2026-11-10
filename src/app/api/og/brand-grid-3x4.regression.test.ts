@@ -12,7 +12,7 @@
  *
  * Padrão blindado:
  *  - Feed IA (brand-post) e carrossel (brand-slide): canvas 1080x1440 (3:4).
- *  - Background do feed IA: Gemini aspectRatio 3:4, fallback gpt-image-1 1024x1536.
+ *  - Background do feed IA: OpenAI vertical 2:3; overlay final recorta em 3:4.
  *  - Capa de reel: canvas continua 1080x1920 (exigência dos Reels), mas pills e
  *    watermark ficam DENTRO da zona central 3:4 (GRID_CROP=240px cortados de
  *    cada lado na grade).
@@ -41,11 +41,11 @@ describe('REGRESSÃO: canvas 3:4 nos formatos de feed', () => {
     expect(src).not.toMatch(/HEIGHT\s*=\s*1350/)
   })
 
-  it('background do feed IA é gerado em 3:4 (Gemini) com fallback vertical (gpt-image-1 1024x1536)', () => {
+  it('background do feed IA usa a rota OpenRouter com composição vertical', () => {
     const src = read('src/lib/ai/generate-brand-post-image.ts')
-    expect(src).toMatch(/aspectRatio:\s*['"]3:4['"]/)
-    expect(src).not.toMatch(/aspectRatio:\s*['"]1:1['"]/)
-    expect(src).toContain("size: '1024x1536'")
+    const openRouterSrc = read('src/lib/ai/openrouter.ts')
+    expect(src).toContain('callOpenRouterImage(prompt)')
+    expect(openRouterSrc).toMatch(/aspectRatio: '1:1' \| '2:3' \| '3:2' = '2:3'/)
   })
 })
 
