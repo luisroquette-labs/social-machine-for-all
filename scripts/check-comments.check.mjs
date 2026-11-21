@@ -49,4 +49,6 @@ test('ignores comment markers in non-comment language constructs', () => {
   assert.deepEqual(findComments('run.sh', "printf '%s' 'literal <<EOF'\n# actual"), [2]);
   assert.deepEqual(findComments('run.sh', "cat <<'END'\n  END\n# literal\nEND\n# actual"), [5]);
   assert.deepEqual(findComments('run.sh', 'cat <<-END\n\tEND\n# actual'), [3]);
+  assert.deepEqual(findComments('run.sh', 'cat <<END-TEXT\n# literal\nEND-TEXT\n# actual'), [4]);
+  assert.deepEqual(findComments('run.sh', "cat <<'END-TEXT'\n# literal\nEND-TEXT\n# actual"), [4]);
 });

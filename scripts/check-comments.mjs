@@ -78,7 +78,7 @@ export function findComments(file, source) {
           const opener = /<<(-?)/g;
           for (const match of line.matchAll(opener)) {
             if (marker && match.index > marker.index) break;
-            const token = /^\s*(['"]?)([A-Za-z_][A-Za-z_0-9]*)\1/.exec(raw.slice(match.index + match[0].length));
+            const token = /^\s*(['"]?)([A-Za-z_][A-Za-z_0-9-]*)\1(?=\s|[;|&<>]|$)/.exec(raw.slice(match.index + match[0].length));
             if (token) { heredoc = { name: token[2], tabs: match[1] === '-' }; break; }
           }
         }
