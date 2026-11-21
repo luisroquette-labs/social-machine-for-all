@@ -25,7 +25,6 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Protected routes: redirect to /login if not authenticated
   const isProtectedRoute = request.nextUrl.pathname.startsWith('/settings') ||
     request.nextUrl.pathname.startsWith('/api/settings') ||
     request.nextUrl.pathname.startsWith('/onboarding') ||
@@ -33,7 +32,6 @@ export async function middleware(request: NextRequest) {
     request.nextUrl.pathname.startsWith('/variables') ||
     request.nextUrl.pathname.startsWith('/api/variables')
 
-  // Public routes that don't need auth
   const isPublicRoute = request.nextUrl.pathname === '/login' ||
     request.nextUrl.pathname.startsWith('/api/cron') ||
     request.nextUrl.pathname.startsWith('/api/agents') ||
