@@ -1,7 +1,5 @@
 import { describe, it, expect } from 'vitest'
 
-// Import the function from reel-renderer project
-// Since it's a separate project, we test the logic inline
 function subtitlesToCapcutAss(subtitles: Array<{text: string, startFrame: number, endFrame: number}>, fps = 30) {
   const WORDS_PER_CHUNK = 4
 
@@ -97,7 +95,7 @@ describe('subtitlesToCapcutAss', () => {
     const subs = [{ text: 'one two three four five six seven eight', startFrame: 0, endFrame: 240 }]
     const ass = subtitlesToCapcutAss(subs, 30)
     const baseLines = ass.split('\n').filter(l => l.startsWith('Dialogue: 0,'))
-    expect(baseLines.length).toBe(2) // 8 words / 4 per chunk = 2 chunks
+    expect(baseLines.length).toBe(2)
   })
 
   it('adds fade effect to base layer', () => {
@@ -121,7 +119,6 @@ describe('subtitlesToCapcutAss', () => {
   it('positions subtitles at bottom (alignment 2, MarginV 120)', () => {
     const subs = [{ text: 'test', startFrame: 0, endFrame: 30 }]
     const ass = subtitlesToCapcutAss(subs, 30)
-    // Alignment 2 = bottom center, MarginV 120
     expect(ass).toMatch(/,2,60,60,120,/)
   })
 })
