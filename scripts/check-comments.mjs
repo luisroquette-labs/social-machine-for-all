@@ -26,7 +26,8 @@ export function findComments(file, source) {
     for (let index = 0; index < value.split('\n').length; index++) lines.push(first + index);
   };
   if (/\.html$/.test(file)) {
-    for (const match of source.matchAll(/<!--[\s\S]*?-->/g)) addRange(match.index, match[0]);
+    const masked = source.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, value => value.replace(/[^\n]/g, ' '));
+    for (const match of masked.matchAll(/<!--[\s\S]*?-->/g)) addRange(match.index, match[0]);
   } else if (/\.(?:css|sql)$/.test(file)) {
     const sql = file.endsWith('.sql');
     for (let index = 0; index < source.length;) {
@@ -39,6 +40,12 @@ export function findComments(file, source) {
         const end = source.indexOf('\n', index + 2);
         index = end < 0 ? source.length : end;
         add(start);
+      } else if (sql && source[index] === '$') {
+        const tag = /^\$[A-Za-z_][A-Za-z_0-9]*\$|^\$\$/.exec(source.slice(index))?.[0];
+        if (tag) {
+          const end = source.indexOf(tag, index + tag.length);
+          index = end < 0 ? source.length : end + tag.length;
+        } else index++;
       } else if (source[index] === '"' || source[index] === "'") {
         const quote = source[index++];
         while (index < source.length) {
@@ -56,12 +63,19 @@ export function findComments(file, source) {
     }
   } else {
     let offset = 0;
+    let heredoc = null;
     for (const [index, raw] of source.split('\n').entries()) {
+      if (heredoc) {
+        if (raw.trim() === heredoc) heredoc = null;
+        offset += raw.length + 1;
+        continue;
+      }
       if (!(index === 0 && raw.startsWith('#!'))) {
         const line = stripQuoted(raw);
-        const marker = /(^|[\s;|&()])#/.exec(line);
+        const marker = file === '.gitignore' ? /^\s*#/.exec(line) : /(^|[\s;|&()])#/.exec(line);
         if (marker) add(offset + marker.index + (marker[1]?.length ?? 0));
       }
+      if (/\.sh$/.test(file)) heredoc = /<<-?\s*['"]?([A-Za-z_][A-Za-z_0-9]*)['"]?/.exec(raw)?.[1] ?? null;
       offset += raw.length + 1;
     }
   }
@@ -80,8 +94,13 @@ function counts(files = trackedFiles()) {
 }
 
 export function check(current, baseline) {
-  return Object.entries(current).flatMap(([file, count]) => count > (baseline[file] ?? 0)
-    ? [`${file}: ${count} comment lines; allowed ${baseline[file] ?? 0}`] : []);
+  return [...new Set([...Object.keys(current), ...Object.keys(baseline)])].flatMap(file => {
+    const count = current[file] ?? 0;
+    const allowed = baseline[file] ?? 0;
+    if (count > allowed) return [`${file}: ${count} comment lines; allowed ${allowed}`];
+    if (count < allowed) return [`${file}: baseline is stale (${count} comment lines; allowed ${allowed})`];
+    return [];
+  });
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

@@ -9,7 +9,10 @@ test('identifies source comments without mistaking URLs or strings for comments'
 
 test('identifies JSX comments and allows no extra comment in another file', () => {
   assert.deepEqual(findComments('example.tsx', 'const view = <div>{/* remove */}</div>;'), [1]);
-  assert.deepEqual(check({ 'a.ts': 1, 'b.ts': 1 }, { 'a.ts': 2 }), ['b.ts: 1 comment lines; allowed 0']);
+  assert.deepEqual(check({ 'a.ts': 1, 'b.ts': 1 }, { 'a.ts': 2 }), [
+    'a.ts: baseline is stale (1 comment lines; allowed 2)',
+    'b.ts: 1 comment lines; allowed 0',
+  ]);
 });
 
 test('ignores shebangs and SQL markers inside strings', () => {
@@ -29,4 +32,17 @@ test('ratchets every line of multiline comments', () => {
 test('apostrophes inside CSS and SQL comments cannot hide later comments', () => {
   assert.deepEqual(findComments('example.css', "/* don't */\n/* it's new */"), [1, 2]);
   assert.deepEqual(findComments('query.sql', "-- don't\n-- it's new"), [1, 2]);
+});
+
+test('a lower count requires tightening the committed baseline', () => {
+  assert.deepEqual(check({ 'a.ts': 0 }, { 'a.ts': 1 }), ['a.ts: baseline is stale (0 comment lines; allowed 1)']);
+  assert.deepEqual(check({}, { 'a.ts': 1 }), ['a.ts: baseline is stale (0 comment lines; allowed 1)']);
+  assert.deepEqual(check({ 'a.ts': 1 }, { 'a.ts': 0 }), ['a.ts: 1 comment lines; allowed 0']);
+});
+
+test('ignores comment markers in non-comment language constructs', () => {
+  assert.deepEqual(findComments('query.sql', 'select $tag$\n-- text\n$tag$;\n-- actual'), [4]);
+  assert.deepEqual(findComments('run.sh', 'cat <<EOF\n# text\nEOF\n# actual'), [4]);
+  assert.deepEqual(findComments('page.html', '<script>const x = "<!-- text -->";</script>\n<!-- actual -->'), [2]);
+  assert.deepEqual(findComments('.gitignore', 'generated #1.log\n# actual'), [2]);
 });
