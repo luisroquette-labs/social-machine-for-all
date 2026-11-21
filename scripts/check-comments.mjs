@@ -66,16 +66,23 @@ export function findComments(file, source) {
     let heredoc = null;
     for (const [index, raw] of source.split('\n').entries()) {
       if (heredoc) {
-        if (raw.trim() === heredoc) heredoc = null;
+        if ((heredoc.tabs ? raw.replace(/^\t+/, '') : raw) === heredoc.name) heredoc = null;
         offset += raw.length + 1;
         continue;
       }
       if (!(index === 0 && raw.startsWith('#!'))) {
         const line = stripQuoted(raw);
-        const marker = file === '.gitignore' ? /^\s*#/.exec(line) : /(^|[\s;|&()])#/.exec(line);
+        const marker = file === '.gitignore' ? /^#/.exec(line) : /(^|[\s;|&()])#/.exec(line);
         if (marker) add(offset + marker.index + (marker[1]?.length ?? 0));
+        if (/\.sh$/.test(file)) {
+          const opener = /<<(-?)/g;
+          for (const match of line.matchAll(opener)) {
+            if (marker && match.index > marker.index) break;
+            const token = /^\s*(['"]?)([A-Za-z_][A-Za-z_0-9]*)\1/.exec(raw.slice(match.index + match[0].length));
+            if (token) { heredoc = { name: token[2], tabs: match[1] === '-' }; break; }
+          }
+        }
       }
-      if (/\.sh$/.test(file)) heredoc = /<<-?\s*['"]?([A-Za-z_][A-Za-z_0-9]*)['"]?/.exec(raw)?.[1] ?? null;
       offset += raw.length + 1;
     }
   }
