@@ -120,7 +120,6 @@ export function ContentQueue({ items }: { items: ContentItem[] }) {
         </TableBody>
       </Table>
 
-      {/* Confirmation dialog */}
       <dialog
         ref={dialogRef}
         className="rounded-lg border border-border bg-background p-6 shadow-lg backdrop:bg-black/50 w-full max-w-sm"

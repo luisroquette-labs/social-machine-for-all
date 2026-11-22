@@ -19,7 +19,6 @@ class AgentRegistry {
   private agents: Map<AgentSlug, BaseAgent> = new Map()
   private loaded = false
 
-  /** Auto-discover and register all agents from their directories */
   async loadAll(): Promise<void> {
     if (this.loaded) return
 

@@ -52,7 +52,6 @@ export default function AgentsSettingsPage() {
       const res = await fetch(`/api/dashboard?workspaceId=${workspaceId}`)
       const json = await res.json()
       const agentList = json.agents ?? []
-      // Fetch full config for each agent
       const configs = await Promise.all(
         agentList.map(async (a: { slug: string }) => {
           const r = await fetch(`/api/settings/agents/${a.slug}`)
@@ -61,7 +60,6 @@ export default function AgentsSettingsPage() {
       )
       setAgents(configs)
     } catch {
-      // keep empty
     } finally {
       setLoading(false)
     }

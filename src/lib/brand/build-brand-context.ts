@@ -43,7 +43,6 @@ export async function buildBrandContext(workspaceId: string): Promise<string> {
     }
   }
 
-  // Default rules
   lines.push(
     '', '## Regras Padrão:',
     '- Nunca use frases genéricas de IA ("como um modelo de linguagem...")',
