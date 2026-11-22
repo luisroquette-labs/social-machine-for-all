@@ -121,7 +121,6 @@ export default function QualitySettingsPage() {
           body: JSON.stringify({ category: 'quality', key: field.key, value: values[field.key] }),
         })
       )
-      // Save forbidden patterns too
       updates.push(
         fetch('/api/settings', {
           method: 'PUT',
